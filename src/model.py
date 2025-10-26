@@ -28,7 +28,6 @@ def criar_quadro():
         quadro.append(linha)
     return quadro
 
-
 def visualizar_quadro(assignment):
     """Mostra visualmente o horário final (simplificado)."""
     print(f"{'':<12} | ", end="")
@@ -51,7 +50,6 @@ def visualizar_quadro(assignment):
         print()
         print("-" * 110)
 
-
 # -------------------------------
 # FUNÇÃO DE CRIAÇÃO DO PROBLEMA
 # -------------------------------
@@ -72,34 +70,45 @@ def criar_problema():
 
     # -------------------------------
     # HARD CONSTRAINTS
-    # -------------------------------
-    # 1️⃣ Uma turma não pode ter mais de 3 aulas por dia
-    def max_3_por_dia(*slots):
-        count_por_dia = [0] * DIAS_SEMANA
-        for s in slots:
-            dia = (s - 1) // BLOCOS_POR_DIA
-            count_por_dia[dia] += 1
-            if count_por_dia[dia] > 3:
-                return False
-        return True
-    problem.addConstraint(max_3_por_dia, variables)
+     # -------------------------------
 
-    # 2️⃣ Disponibilidade do professor
-    tr = dados.get("tr", {})
-    dsd = dados.get("dsd", {})
-    for professor, indisponiveis in tr.items():
-        cursos_prof = dsd.get(professor, [])
+ # 1️⃣ Todas as aulas de uma turma em horários distintos
+    for turma in dados["cc"].keys():
+        turma_vars = [v for v in variables if v.startswith(f"{turma}_")]
+        problem.addConstraint(AllDifferentConstraint(), turma_vars)
+
+    # 2️⃣ Professor não pode dar duas aulas ao mesmo tempo
+    for professor, cursos_prof in dados["dsd"].items():
+        prof_vars = [v for v in variables if v.split("_")[1] in cursos_prof]
+        if len(prof_vars) > 1:
+            problem.addConstraint(AllDifferentConstraint(), prof_vars)
+
+    # 3️⃣ Disponibilidade do professor
+    for professor, indisponiveis in dados.get("tr", {}).items():
+        cursos_prof = dados["dsd"].get(professor, [])
         for var in variables:
-            curso = var[1]
+            curso = var.split("_")[1]
             if curso in cursos_prof:
-                def disponivel(slot, indis=indisponiveis):
-                    return slot not in indis
-                problem.addConstraint(disponivel, [var])
+                problem.addConstraint(lambda ts, indis=indisponiveis: ts not in indis, [var])
 
+    # 4️⃣ Uma turma não pode ter mais de 3 aulas por dia
+    for turma in dados["cc"].keys():
+        turma_vars = [v for v in variables if v.startswith(f"{turma}_")]
+
+        def max_3_por_dia(*slots):
+            contagem = [0] * DIAS_SEMANA
+            for s in slots:
+                dia = (s - 1) // BLOCOS_POR_DIA
+                contagem[dia] += 1
+                if contagem[dia] > 3:
+                    return False
+            return True
+
+        problem.addConstraint(max_3_por_dia, turma_vars)
     # -------------------------------
     # SOFT CONSTRAINTS
     # -------------------------------
-    # Aulas do mesmo curso em dias distintos
+    # 1️⃣ Aulas do mesmo curso devem ser em dias distintos
     cursos_por_turma = defaultdict(list)
     for turma, curso, idx in variables:
         cursos_por_turma[(turma, curso)].append((turma, curso, idx))
@@ -117,7 +126,7 @@ def criar_problema():
         return len(dias) <= 4
     problem.addConstraint(preferir_4_dias, variables)
 
-    # Aulas consecutivas no mesmo dia
+    # 3️⃣ As aulas em cada dia devem ser consecutivas
     def aulas_consecutivas(*slots):
         slots_por_dia = defaultdict(list)
         for s in slots:
@@ -133,6 +142,7 @@ def criar_problema():
 
     return problem
 
+    #5️⃣ Classes last 2 hours-já foi implementado na definição dos blocos de horário
 
 # -------------------------------
 # FUNÇÕES PARA MARCAR ONLINE
@@ -167,7 +177,6 @@ def preencher_quadro_com_solucao(solution, dados):
 
     return quadro
 
-
 def visualizar_quadro_com_aulas(quadro):
     """Mostra o quadro com indicação Online quando aplicável"""
     cabecalho = f"{'Horário':<12} |" + "".join([f" {dia:<15} |" for dia in dias_semana])
@@ -185,7 +194,6 @@ def visualizar_quadro_com_aulas(quadro):
             linha_str += f" {aulas_texto:<15} |"
         print(linha_str)
         print("-" * 110)
-
 
 # -------------------------------
 # EXECUÇÃO DIRETA (TESTE)
