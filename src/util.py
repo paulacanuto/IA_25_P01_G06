@@ -1,263 +1,269 @@
 from constraint import Problem, AllDifferentConstraint
-from model import *
+from model import BLOCOS_POR_DIA, DIAS_SEMANA, TOTAL_TIMESLOTS, dias_semana, horarios
+from collections import defaultdict
 
 def criar_quadro_horario_com_aulas():
-    # Cria um quadro horário com a estrutura para as aulas
+    """Cria quadro horário vazio estruturado por dias e horários"""
     quadro = []
     for i in range(BLOCOS_POR_DIA):
         linha = []
         for j in range(DIAS_SEMANA):
             timeslot_index = j * BLOCOS_POR_DIA + i + 1
             linha.append({
-                'timeslot': f"timeslot_{timeslot_index}",
-                'aulas': [],
-                'dia': dias_semana[j],
-                'horario': horarios[i],
-                'numero': timeslot_index
+                "timeslot": f"timeslot_{timeslot_index}",
+                "aulas": [],
+                "dia": dias_semana[j],
+                "horario": horarios[i],
+                "numero": timeslot_index
             })
         quadro.append(linha)
     return quadro
 
 
 def atribuir_aulas_ao_horario(dados):
-    # Atribui aulas seguindo e respeitando restrições
+    """Cria e resolve o problema de agendamento com base nas restrições"""
     problem = Problem()
     variables = []
     dominio_timeslots = list(range(1, TOTAL_TIMESLOTS + 1))
 
-    # Cria variáveis
-    for turma, cursos in dados['cc'].items():
+    # Criar variáveis: turma_curso_aulaX
+    for turma, cursos in dados["cc"].items():
         for curso in cursos:
-            for aula_index in [1, 2]:
-                var_name = f"{turma}_{curso}_aula{aula_index}"
+            n_aulas = 1 if curso in dados.get("olw", []) else 2
+            for aula_idx in range(1, n_aulas + 1):
+                var_name = f"{turma}_{curso}_aula{aula_idx}"
                 problem.addVariable(var_name, dominio_timeslots)
                 variables.append(var_name)
 
     print(f"Total de aulas para agendar: {len(variables)}")
 
-    # RESTRIÇÕES (HARD CONSTRAINTS)
-    
-    # Aulas diferentes por turma (ALLDIFF)
-    for turma in dados['cc'].keys():
-        turma_vars = [var for var in variables if var.startswith(f"{turma}_")]
+    # ---------------------------
+    #       HARD CONSTRAINTS
+    # ---------------------------
+
+    # 1️⃣ Todas as aulas de uma turma em horários distintos
+    for turma in dados["cc"].keys():
+        turma_vars = [v for v in variables if v.startswith(f"{turma}_")]
         problem.addConstraint(AllDifferentConstraint(), turma_vars)
 
-    # Docente não pode dar duas aulas ao mesmo tempo
-    for professor, cursos_prof in dados['dsd'].items():
-        professor_vars = []
-        for var_name in variables:
-            curso = var_name.split('_')[1]
+    # 2️⃣ Professor não pode dar duas aulas ao mesmo tempo
+    for professor, cursos_prof in dados["dsd"].items():
+        prof_vars = [v for v in variables if v.split("_")[1] in cursos_prof]
+        if len(prof_vars) > 1:
+            problem.addConstraint(AllDifferentConstraint(), prof_vars)
+
+    # 3️⃣ Disponibilidade do professor
+    for professor, indisponiveis in dados.get("tr", {}).items():
+        cursos_prof = dados["dsd"].get(professor, [])
+        for var in variables:
+            curso = var.split("_")[1]
             if curso in cursos_prof:
-                professor_vars.append(var_name)
-        if professor_vars:
-            problem.addConstraint(AllDifferentConstraint(), professor_vars)
+                problem.addConstraint(lambda ts, indis=indisponiveis: ts not in indis, [var])
 
-    # Restrições de disponibilidade do Docente
-    for professor, slots_indisponiveis in dados['tr'].items():
-        cursos_prof = dados['dsd'][professor]
-        for var_name in variables:
-            curso = var_name.split('_')[1]
-            if curso in cursos_prof:
-                def professor_disponivel(timeslot, indisponiveis=slots_indisponiveis):
-                    return timeslot not in indisponiveis
+    # 4️⃣ Uma turma não pode ter mais de 3 aulas por dia
+    for turma in dados["cc"].keys():
+        turma_vars = [v for v in variables if v.startswith(f"{turma}_")]
 
-                problem.addConstraint(professor_disponivel, [var_name])
+        def max_3_por_dia(*slots):
+            contagem = [0] * DIAS_SEMANA
+            for s in slots:
+                dia = (s - 1) // BLOCOS_POR_DIA
+                contagem[dia] += 1
+                if contagem[dia] > 3:
+                    return False
+            return True
 
-    # Máximo 3 aulas por dia por turma
-    for turma in dados['cc'].keys():
-        turma_vars = [var for var in variables if var.startswith(f"{turma}_")]
+        problem.addConstraint(max_3_por_dia, turma_vars)
 
-        for dia in range(DIAS_SEMANA):
-            slots_do_dia = list(range(dia * BLOCOS_POR_DIA + 1, (dia + 1) * BLOCOS_POR_DIA + 1))
+    # ---------------------------
+    #       SOFT CONSTRAINTS
+    # ---------------------------
 
-            # Constraint individual para cada dia
-            def max_aulas_dia(*assignments, slots_dia=slots_do_dia):
-                count = 0
-                for slot in assignments:
-                    if slot in slots_dia:
-                        count += 1
-                return count <= 3
+    # 1️⃣ Aulas do mesmo curso devem ser em dias distintos
+    cursos_por_turma = defaultdict(list)
+    for var in variables:
+        turma, curso = var.split("_")[0], var.split("_")[1]
+        cursos_por_turma[(turma, curso)].append(var)
 
-            problem.addConstraint(max_aulas_dia, turma_vars)
+    for grupo in cursos_por_turma.values():
+        if len(grupo) > 1:
+            def dias_diferentes(*slots):
+                dias = [(s - 1) // BLOCOS_POR_DIA for s in slots]
+                return len(dias) == len(set(dias))
+            problem.addConstraint(dias_diferentes, grupo)
 
+    # 2️⃣ Cada turma deve ter aulas em, se possível, apenas 4 dias
+    for turma in dados["cc"].keys():
+        turma_vars = [v for v in variables if v.startswith(f"{turma}_")]
 
-    #TENTATIVA ANTERIOR
-    # for turma in dados['cc'].keys():
-    #     turma_vars = [var for var in variables if var.startswith(f"{turma}_")]
-    #     for dia in range(DIAS_SEMANA):
-    #         slots_do_dia = list(range(dia * BLOCOS_POR_DIA + 1, (dia + 1) * BLOCOS_POR_DIA + 1))
-    #
-    #         def max_3_aulas_por_dia(*assignments):
-    #             aulas_no_dia = 0
-    #             for timeslot in assignments:
-    #                 if timeslot in slots_do_dia:
-    #                     aulas_no_dia += 1
-    #             return aulas_no_dia <= 3
-    #
-    #         problem.addConstraint(max_3_aulas_por_dia, turma_vars)
+        def preferir_4_dias(*slots):
+            dias = set((s - 1) // BLOCOS_POR_DIA for s in slots)
+            return len(dias) <= 4
+        problem.addConstraint(preferir_4_dias, turma_vars)
 
+    # 3️⃣ As aulas em cada dia devem ser consecutivas
+    for turma in dados["cc"].keys():
+        turma_vars = [v for v in variables if v.startswith(f"{turma}_")]
 
-    # Aulas online ao mesmo dia
-    for curso_online in dados['oc'].keys():
-        aulas_online = [var for var in variables if f"_{curso_online}_" in var]
-        if len(aulas_online) >= 2:
-            def aulas_online_mesmo_dia(timeslot1, timeslot2):
-                dia1 = (timeslot1 - 1) // BLOCOS_POR_DIA
-                dia2 = (timeslot2 - 1) // BLOCOS_POR_DIA
-                return dia1 == dia2
-            problem.addConstraint(aulas_online_mesmo_dia, aulas_online)
+        def aulas_consecutivas(*slots):
+            por_dia = defaultdict(list)
+            for s in slots:
+                dia = (s - 1) // BLOCOS_POR_DIA
+                por_dia[dia].append(s)
+            for lista in por_dia.values():
+                lista.sort()
+                for i in range(len(lista) - 1):
+                    if lista[i + 1] != lista[i] + 1:
+                        return False
+            return True
 
-    # for curso, aula_online_index in dados['oc'].items():
-    #         aulas_curso = [var for var in variables if f"_{curso}_" in var]
-    #         if len(aulas_curso) >= 2:
-    #             def aulas_mesmo_dia(*timeslots):
-    #                 dias = [(ts - 1) // BLOCOS_POR_DIA for ts in timeslots]
-    #                 return all(dia == dias[0] for dia in dias)
-    #           problem.addConstraint(aulas_mesmo_dia, aulas_curso)
-            
+        problem.addConstraint(aulas_consecutivas, turma_vars)
+
+    # ---------------------------
+    #       RESOLUÇÃO
+    # ---------------------------
     print("🔍 A resolver o problema de agendamento...")
     solution = problem.getSolution()
 
     if not solution:
-        print("❌ Não foi possível encontrar uma solução!")
+        print("❌ Nenhuma solução encontrada!")
         return None
 
-    print("✅ Solução encontrada!")
+    print("✅ Solução encontrada com sucesso!")
     return solution
 
 def preencher_quadro_com_solucao(quadro, solution, dados):
-    # Preenche o quadro horário com a solução encontrada
+    """Preenche o quadro horário com a solução encontrada, considerando aulas online."""
     for var_name, timeslot in solution.items():
-        partes = var_name.split('_')
-        turma = partes[0]
-        curso = partes[1]
+        turma, curso, aula_str = var_name.split("_")
+        aula_idx = int(aula_str.replace("aula", ""))  # número da aula do curso
+        timeslot_idx = timeslot - 1
 
-        timeslot_index = timeslot - 1
+        # Calcular posição no quadro
+        coluna = timeslot_idx // BLOCOS_POR_DIA  # dia
+        linha = timeslot_idx % BLOCOS_POR_DIA    # horário
 
-        linha = timeslot_index % BLOCOS_POR_DIA  # 0-3
-        coluna = timeslot_index // BLOCOS_POR_DIA  # 0-4
+        # Índices de aulas online para este curso
+        online_indices = dados.get("oc", {}).get(curso, [])
+        if not isinstance(online_indices, list):
+            online_indices = [online_indices]
 
-        sala = dados['rr'].get(curso, f"Room{turma[-1]}")
-        aula_info = {'turma': turma, 'curso': curso, 'sala': sala}
-        quadro[linha][coluna]['aulas'].append(aula_info)
+        # Definir sala
+        sala = "Online" if aula_idx in online_indices else dados.get("rr", {}).get(curso, f"Room{turma[-1]}")
+
+        # Adicionar aula ao quadro
+        aula_info = {"turma": turma, "curso": curso, "sala": sala}
+        quadro[linha][coluna]["aulas"].append(aula_info)
 
     return quadro
 
 
-def visualizar_horario_por_turma(quadro_geral, dados):
-    # Mostra horário de cada turma
-    for turma in dados['cc'].keys():
-        print(f"\n" + "=" * 80)
+
+def visualizar_horario_por_turma(quadro, dados):
+    """Imprime o horário final organizado por turma"""
+    for turma in dados["cc"].keys():
+        print("\n" + "=" * 80)
         print(f"HORÁRIO DA TURMA {turma}")
         print("=" * 80)
 
-        cabecalho = f"{'Horário':<12} |"
-        for dia in dias_semana:
-            cabecalho += f" {dia:<20} |"
+        cabecalho = f"{'Horário':<12} |" + "".join([f" {dia:<20} |" for dia in dias_semana])
         print(cabecalho)
         print("-" * 140)
 
         for i in range(BLOCOS_POR_DIA):
             linha_str = f"{horarios[i]:<12} |"
-
             for j in range(DIAS_SEMANA):
-                celula = quadro_geral[i][j]
+                celula = quadro[i][j]
                 conteudo = "---"
-
-                for aula in celula['aulas']:
-                    if aula['turma'] == turma:
+                for aula in celula["aulas"]:
+                    if aula["turma"] == turma:
                         conteudo = f"{aula['curso']} {aula['sala']}"
                         break
-
                 linha_str += f" {conteudo:<20} |"
-
             print(linha_str)
             print("-" * 140)
 
 
 def verificar_restricoes(quadro, dados):
-    # Verifica se todas as restrições foram cumpridas
-    print("\n" + "🔍 VERIFICAÇÃO DE RESTRIÇÕES")
-    print("=" * 50)
-
+    """Verifica se todas as hard constraints estão a ser cumpridas"""
     problemas = []
 
-    # Verificar conflitos de professor
+    # 1️⃣ Aulas de uma turma em horários distintos
+    for turma in dados["cc"].keys():
+        slots_turma = []
+        for i in range(BLOCOS_POR_DIA):
+            for j in range(DIAS_SEMANA):
+                for aula in quadro[i][j]["aulas"]:
+                    if aula["turma"] == turma:
+                        slots_turma.append(quadro[i][j]["numero"])
+        if len(slots_turma) != len(set(slots_turma)):
+            problemas.append(f"❌ Turma {turma} tem aulas em horários repetidos!")
+
+    # 2️⃣ Professores não podem dar duas aulas ao mesmo tempo
     for i in range(BLOCOS_POR_DIA):
         for j in range(DIAS_SEMANA):
             celula = quadro[i][j]
-            professores_na_celula = {}
-
-            for aula in celula['aulas']:
-                # Busca o professor da aula atribuída
-                professor = None
-                for prof, cursos in dados['dsd'].items():
-                    if aula['curso'] in cursos:
-                        professor = prof
-                        break
-
-                if professor:
-                    if professor in professores_na_celula:
+            profs = {}
+            for aula in celula["aulas"]:
+                prof = next((p for p, cursos in dados.get("dsd", {}).items() if aula["curso"] in cursos), None)
+                if prof:
+                    if prof in profs:
                         problemas.append(
-                            f"❌ Professor {professor} com aula dupla: {professores_na_celula[professor]} e {aula['curso']} no {celula['dia']} {celula['horario']}")
-                    professores_na_celula[professor] = aula['curso']
+                            f"❌ Professor {prof} tem aulas simultâneas: {profs[prof]} e {aula['curso']} ({celula['dia']} {celula['horario']})"
+                        )
+                    profs[prof] = aula["curso"]
 
-    # Verificar restrições de horário do professor
-    for professor, slots_proibidos in dados['tr'].items():
-        for timeslot_proibido in slots_proibidos:
-            coluna = (timeslot_proibido - 1) // BLOCOS_POR_DIA
-            linha = (timeslot_proibido - 1) % BLOCOS_POR_DIA
-
-            celula = quadro[linha][coluna]
-            for aula in celula['aulas']:
-                if aula['curso'] in dados['dsd'].get(professor, []):
+    # 3️⃣ Disponibilidade do professor
+    for i in range(BLOCOS_POR_DIA):
+        for j in range(DIAS_SEMANA):
+            celula = quadro[i][j]
+            for aula in celula["aulas"]:
+                prof = next((p for p, cursos in dados.get("dsd", {}).items() if aula["curso"] in cursos), None)
+                if prof and (celula["numero"] in dados.get("tr", {}).get(prof, [])):
                     problemas.append(
-                        f"❌ Professor {professor} a dar {aula['curso']} em slot proibido {timeslot_proibido} ({celula['dia']} {celula['horario']})")
+                        f"❌ Professor {prof} não disponível em {celula['dia']} {celula['horario']} para curso {aula['curso']}"
+                    )
 
-    # Verificar máximo 3 aulas por dia por turma
-    for turma in dados['cc'].keys():
-        for dia_idx in range(DIAS_SEMANA):
-            aulas_no_dia = 0
-            for i in range(BLOCOS_POR_DIA):
-                celula = quadro[i][dia_idx]
-                for aula in celula['aulas']:
-                    if aula['turma'] == turma:
-                        aulas_no_dia += 1
-
+    # 4️⃣ Máximo de 3 aulas por dia por turma
+    for turma in dados["cc"].keys():
+        for d in range(DIAS_SEMANA):
+            aulas_no_dia = sum(
+                1 for i in range(BLOCOS_POR_DIA)
+                for aula in quadro[i][d]["aulas"]
+                if aula["turma"] == turma
+            )
             if aulas_no_dia > 3:
-                problemas.append(f"❌ Turma {turma} com {aulas_no_dia} aulas na {dias_semana[dia_idx]} (máximo: 3)")
+                problemas.append(f"❌ Turma {turma} tem {aulas_no_dia} aulas na {dias_semana[d]} (máx. 3)")
 
-    # Apresenta resultados
     if problemas:
-        print("⛔ PROBLEMAS ENCONTRADOS:")
-        for problema in problemas:
-            print(problema)
+        print("\n⛔ PROBLEMAS DETETADOS:")
+        for p in problemas:
+            print(p)
     else:
-        print("✅ TODAS AS RESTRIÇÕES CUMPRIDAS!")
+        print("✅ Todas as hard constraints foram cumpridas!")
 
     return len(problemas) == 0
 
-       
+
 def main(dados):
-    print("INICIANDO AGENDAMENTO")
-
-    # Cria quadro vazio
-    quadro = criar_quadro_horario_com_aulas()
-
-    # Atribui aulas
-    solution = atribuir_aulas_ao_horario(dados)
-    if not solution:
-        print("Não foi possível criar o horário.")
+    print("🚀 INICIANDO AGENDAMENTO AUTOMÁTICO")
+    
+    # 1️⃣ Criar e resolver problema de agendamento
+    problem = criar_problema()
+    if not problem:
+        print("❌ Não foi possível criar o problema de agendamento.")
         return
 
-    # Preenche quadro
+    solution = problem.getSolution()
+    if not solution:
+        print("⚠️ Nenhuma solução encontrada!")
+        return
+
+    # 2️⃣ Criar quadro horário vazio
+    quadro = criar_quadro_horario_com_aulas()
+
+    # 3️⃣ Preencher o quadro com a solução, incluindo aulas online
     quadro_preenchido = preencher_quadro_com_solucao(quadro, solution, dados)
 
-    # Verifica restrições
-    todas_cumpridas = verificar_restricoes(quadro_preenchido, dados)
-    print(f"\nVerificação final das restrições: {'Todas cumpridas' if todas_cumpridas else 'Problemas encontrados'}")
-
-    # Mostra horários
-    print("\n" + "HORÁRIOS FINAIS")
-    print("=" * 50)
+    # 4️⃣ Visualizar horário final por turma
     visualizar_horario_por_turma(quadro_preenchido, dados)

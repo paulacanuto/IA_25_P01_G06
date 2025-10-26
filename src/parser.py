@@ -1,3 +1,4 @@
+#parser.py
 def ler_ficheiro(nome="dataset.txt"):
     dados = {
         'cc': {},   # Cursos por turma
@@ -7,137 +8,121 @@ def ler_ficheiro(nome="dataset.txt"):
         'rr': {},   # Cursos e respetivas salas
         'oc': {}    # Cursos e respetivos índices de aula
     }
+
     try:
         with open(nome, 'r', encoding='utf-8') as ficheiro:
             linhas = ficheiro.readlines()
 
-        seccao_atual = None
+        secao_atual = None
 
         for linha in linhas:
             linha = linha.strip()
 
-            # Ignorar linhas vazias
-            if not linha:
+            # Ignorar linhas vazias ou comentários
+            if not linha or linha.startswith('#head'):
                 continue
 
             # Detetar secções
             if linha.startswith('#cc'):
-                seccao_atual = 'cc'
+                secao_atual = 'cc'
                 continue
             elif linha.startswith('#olw'):
-                seccao_atual = 'olw'
+                secao_atual = 'olw'
                 continue
             elif linha.startswith('#dsd'):
-                seccao_atual = 'dsd'
+                secao_atual = 'dsd'
                 continue
             elif linha.startswith('#tr'):
-                seccao_atual = 'tr'
+                secao_atual = 'tr'
                 continue
             elif linha.startswith('#rr'):
-                seccao_atual = 'rr'
+                secao_atual = 'rr'
                 continue
             elif linha.startswith('#oc'):
-                seccao_atual = 'oc'
-                continue
-            elif linha.startswith('#head'):
-                seccao_atual = None
+                secao_atual = 'oc'
                 continue
 
             # Processar dados baseado na secção atual
-            if seccao_atual == 'cc':
+            if secao_atual == 'cc':
                 partes = linha.split()
-                if partes:
+                if len(partes) >= 2:
                     turma = partes[0]
                     cursos = partes[1:]
                     dados['cc'][turma] = cursos
 
-            elif seccao_atual == 'olw':
-                # No exemplo está vazio, mas processamos caso existam dados
-                if linha and not linha.startswith('#'):
-                    cursos = linha.split()
+            elif secao_atual == 'olw':
+                cursos = linha.split()
+                if cursos:
                     dados['olw'].extend(cursos)
 
-            elif seccao_atual == 'dsd':
+            elif secao_atual == 'dsd':
                 partes = linha.split()
-                if partes:
+                if len(partes) >= 2:
                     professor = partes[0]
                     cursos = partes[1:]
                     dados['dsd'][professor] = cursos
 
-            elif seccao_atual == 'tr':
+            elif secao_atual == 'tr':
                 partes = linha.split()
-                if partes:
+                if len(partes) >= 2:
                     professor = partes[0]
                     slots = list(map(int, partes[1:]))
                     dados['tr'][professor] = slots
 
-            elif seccao_atual == 'rr':
+            elif secao_atual == 'rr':
                 partes = linha.split()
-                if len(partes) >= 2:
-                    curso = partes[0]
-                    sala = partes[1]
+                if len(partes) == 2:
+                    curso, sala = partes
                     dados['rr'][curso] = sala
 
-            elif seccao_atual == 'oc':
+            elif secao_atual == 'oc':
                 partes = linha.split()
                 if len(partes) >= 2:
                     curso = partes[0]
-                    indice_aula = int(partes[1])
-                    dados['oc'][curso] = indice_aula
+                    # Suportar múltiplos índices de aula
+                    indices = list(map(int, partes[1:]))
+                    dados['oc'][curso] = indices 
+
         return dados
-    
+
     except FileNotFoundError:
         print(f"Erro: Ficheiro '{nome}' não encontrado!")
         return None
     except Exception as e:
         print(f"Erro ao ler ficheiro: {e}")
         return None
-    
+
+
 def mostrar_dados(dados):
     if not dados:
         print("Nenhum dado para mostrar!")
         return
 
-    # # Mostrar cursos por turma (cc)
-    # print("\nCURSOS POR TURMA (#cc):")
-    # print("-" * 40)
-    # for turma, cursos in dados['cc'].items():
-    #     print(f"{turma}: {', '.join(cursos)}")
-    # print("=" * 50)
+    print("\nCURSOS POR TURMA (#cc):")
+    for turma, cursos in dados['cc'].items():
+        print(f"{turma}: {', '.join(cursos)}")
 
-    # # Mostrar cursos com uma aula por semana (olw)
-    # print(f"\nCURSOS COM UMA AULA POR SEMANA (#olw):")
-    # print("-" * 40)
-    # if dados['olw']:
-    #     print(', '.join(dados['olw']))
-    # else:
-    #     print("Nenhum curso com uma aula por semana")
-    # print("=" * 50)
+    print("\nCURSOS COM UMA AULA POR SEMANA (#olw):")
+    if dados['olw']:
+        print(', '.join(dados['olw']))
+    else:
+        print("Nenhum curso com uma aula por semana")
 
-    # # Mostrar cursos por professor (dsd)
-    # print("\nCURSOS POR PROFESSOR (#dsd):")
-    # print("-" * 40)
-    # for professor, cursos in dados['dsd'].items():
-    #     print(f"{professor}: {', '.join(cursos)}")
-    # print("=" * 50)
+    print("\nCURSOS POR PROFESSOR (#dsd):")
+    for professor, cursos in dados['dsd'].items():
+        print(f"{professor}: {', '.join(cursos)}")
 
-    # # Mostrar restrições de horário (tr)
-    # print("\nRESTRIÇÕES DE HORÁRIO DOS PROFESSORES (#tr):")
-    # print("-" * 40)
-    # for professor, slots in dados['tr'].items():
-    #     slots_str = ', '.join(map(str, slots))
-    #     print(f"{professor}: slots {slots_str}")
-    # print("=" * 50)
+    print("\nRESTRIÇÕES DE HORÁRIO DOS PROFESSORES (#tr):")
+    for professor, slots in dados['tr'].items():
+        print(f"{professor}: slots {', '.join(map(str, slots))}")
 
-    # # Mostrar restrições de sala (rr)
-    # print("\nRESTRIÇÕES DE SALA (#rr):")
-    # print("-" * 40)
-    # for curso, sala in dados['rr'].items():
-    #     print(f"{curso}: {sala}")
+    print("\nRESTRIÇÕES DE SALA (#rr):")
+    for curso, sala in dados['rr'].items():
+        print(f"{curso}: {sala}")
 
-    # print("=" * 50)
-    # # Mostrar aulas online (oc)
-    # print("\nAULAS ONLINE (#oc):")
-    # print("-" * 40)
-    # for curso, indice in dados['oc'].items():
-    #     print(f"{curso}: aula {indice} é online")
+    print("\nAULAS ONLINE (#oc):")
+    for curso, indices in dados['oc'].items():
+        if isinstance(indices, list):
+            print(f"{curso}: aulas {', '.join(map(str, indices))} são online")
+        else:
+            print(f"{curso}: aula {indices} é online")

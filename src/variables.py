@@ -1,20 +1,46 @@
-# dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
-# horarios = ["09h-11h", "11h-13h", "14h-16h", "16h-18h"]
+#variables.py
+from parser import ler_ficheiro
 
-# def variaveis(dados):
-#     variaveis = []
-#     for turma, cursos, in dados['cc'].items():
-#         for curso in cursos:
-#             num_aula = 1 if curso in dados['olw'] else 2
-#             for i in range(1, num_aula + 1):
-#                 variaveis.append(f"{turma}_{curso}_{i}")
-#     return variaveis
+def criar_variaveis_dominios(nome_ficheiro="dataset.txt"):
+    # Lê os dados do ficheiro
+    dados = ler_ficheiro(nome_ficheiro)
+    if not dados:
+        return None, None
 
-# def dominio(dados):
-#     salas = list(set(dados['rr'].values())) if dados['rr'] else ["S1", "S2", "S3"]
-#     dominio = []
-#     for d in range(len(dias_semana)):
-#         for h in range(len(horarios)):
-#             for s in salas:
-#                 dominio.append((d, h, s))
-#     return dominio
+    variables = []  # Lista de tuplos (turma, curso, aula_index)
+    domains = {}    # Dicionário {variavel: lista de slots disponíveis}
+    all_slots = list(range(1, 21))  # Blocos 1 a 20
+
+    # Para cada turma e curso
+    for turma, cursos in dados['cc'].items():
+        for curso in cursos:
+            # Determina número de aulas por semana
+            n_aulas = 1 if curso in dados['olw'] else 2
+            for aula_index in range(1, n_aulas + 1):
+                var = (turma, curso, aula_index)
+                variables.append(var)
+
+                # Identifica o professor do curso
+                prof = None
+                for p, cursos_p in dados['dsd'].items():
+                    if curso in cursos_p:
+                        prof = p
+                        break
+
+                # Remove slots indisponíveis do professor
+                indisponiveis = dados['tr'].get(prof, [])
+                domain = [slot for slot in all_slots if slot not in indisponiveis]
+                domains[var] = domain
+
+    return variables, domains
+
+
+# Função para testar a criação
+if __name__ == "__main__":
+    vars_, doms = criar_variaveis_dominios("dataset.txt")
+    print("Variáveis:")
+    for v in vars_:
+        print(v)
+    print("\nDomínios:")
+    for k, d in doms.items():
+        print(f"{k}: {d}")
