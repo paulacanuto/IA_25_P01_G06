@@ -1,5 +1,5 @@
 from constraint import Problem, AllDifferentConstraint
-from model import BLOCOS_POR_DIA, DIAS_SEMANA, TOTAL_TIMESLOTS, dias_semana, horarios
+from model import BLOCOS_POR_DIA, DIAS_SEMANA, TOTAL_TIMESLOTS, dias_semana, horarios, criar_problema
 from collections import defaultdict
 
 def criar_quadro_horario_com_aulas():
