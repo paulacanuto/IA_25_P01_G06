@@ -122,14 +122,14 @@ def atribuir_aulas_ao_horario(dados):
     # ---------------------------
     #       RESOLUÇÃO
     # ---------------------------
-    print("🔍 A resolver o problema de agendamento...")
+    print(" A resolver o problema de agendamento...")
     solution = problem.getSolution()
 
     if not solution:
-        print("❌ Nenhuma solução encontrada!")
+        print(" Nenhuma solução encontrada!")
         return None
 
-    print("✅ Solução encontrada com sucesso!")
+    print("Solução encontrada com sucesso!")
     return solution
 
 def preencher_quadro_com_solucao(quadro, solution, dados):
@@ -197,7 +197,7 @@ def verificar_restricoes(quadro, dados):
                     if aula["turma"] == turma:
                         slots_turma.append(quadro[i][j]["numero"])
         if len(slots_turma) != len(set(slots_turma)):
-            problemas.append(f"❌ Turma {turma} tem aulas em horários repetidos!")
+            problemas.append(f" Turma {turma} tem aulas em horários repetidos!")
 
     # 2️⃣ Professores não podem dar duas aulas ao mesmo tempo
     for i in range(BLOCOS_POR_DIA):
@@ -209,7 +209,7 @@ def verificar_restricoes(quadro, dados):
                 if prof:
                     if prof in profs:
                         problemas.append(
-                            f"❌ Professor {prof} tem aulas simultâneas: {profs[prof]} e {aula['curso']} ({celula['dia']} {celula['horario']})"
+                            f" Professor {prof} tem aulas simultâneas: {profs[prof]} e {aula['curso']} ({celula['dia']} {celula['horario']})"
                         )
                     profs[prof] = aula["curso"]
 
@@ -221,7 +221,7 @@ def verificar_restricoes(quadro, dados):
                 prof = next((p for p, cursos in dados.get("dsd", {}).items() if aula["curso"] in cursos), None)
                 if prof and (celula["numero"] in dados.get("tr", {}).get(prof, [])):
                     problemas.append(
-                        f"❌ Professor {prof} não disponível em {celula['dia']} {celula['horario']} para curso {aula['curso']}"
+                        f" Professor {prof} não disponível em {celula['dia']} {celula['horario']} para curso {aula['curso']}"
                     )
 
     # 4️⃣ Máximo de 3 aulas por dia por turma
@@ -233,10 +233,10 @@ def verificar_restricoes(quadro, dados):
                 if aula["turma"] == turma
             )
             if aulas_no_dia > 3:
-                problemas.append(f"❌ Turma {turma} tem {aulas_no_dia} aulas na {dias_semana[d]} (máx. 3)")
+                problemas.append(f" Turma {turma} tem {aulas_no_dia} aulas na {dias_semana[d]} (máx. 3)")
 
     if problemas:
-        print("\n⛔ PROBLEMAS DETETADOS:")
+        print("\n PROBLEMAS DETETADOS:")
         for p in problemas:
             print(p)
     else:
@@ -246,17 +246,17 @@ def verificar_restricoes(quadro, dados):
 
 
 def main(dados):
-    print("🚀 INICIANDO AGENDAMENTO AUTOMÁTICO")
+    print(" INICIANDO AGENDAMENTO AUTOMÁTICO")
     
     # 1️⃣ Criar e resolver problema de agendamento
     problem = criar_problema()
     if not problem:
-        print("❌ Não foi possível criar o problema de agendamento.")
+        print("Não foi possível criar o problema de agendamento.")
         return
 
     solution = problem.getSolution()
     if not solution:
-        print("⚠️ Nenhuma solução encontrada!")
+        print(" Nenhuma solução encontrada!")
         return
 
     # 2️⃣ Criar quadro horário vazio

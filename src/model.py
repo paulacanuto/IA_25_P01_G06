@@ -59,7 +59,7 @@ def criar_problema():
     # Ler variáveis e domínios
     variables, domains = criar_variaveis_dominios("dataset.txt")
     if not variables:
-        print("❌ Erro: não foi possível criar variáveis.")
+        print(" Erro: não foi possível criar variáveis.")
         return None
 
     # Adicionar variáveis ao problema
@@ -208,4 +208,4 @@ if __name__ == "__main__":
             quadro = preencher_quadro_com_solucao(solutions[0], dados)
             visualizar_quadro_com_aulas(quadro)
         else:
-            print("⚠️ Nenhuma solução encontrada.")
+            print("Nenhuma solução encontrada.")
