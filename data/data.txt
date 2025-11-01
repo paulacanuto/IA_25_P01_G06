@@ -1,0 +1,40 @@
+#head
+— All classes last 2 hours
+— Classes will be schedule from Monday to Friday
+— Each day has 4 blocks of 2 hour each
+— Blocks are numbered from 1 to 20 (5 days *4 blocks), Monday 9am to Friday 4pm 
+— In this dataset alll classes have 2 lessons per week
+
+#cc — courses assigned to classes (class, courses*)
+LESI       PDM ISI IA SETR PA
+LEEC       PS IM R IE RCSD
+LEIM       GSI IA RCE AST ISC GUS
+LDJG       IAAJ PVR TCGEV PAG
+
+#olw — courses with just one lesson per week
+
+#dsd — courses assigned to lecturers (teacher, courses*)
+João         PDM PS IM GSI
+Pedro       ISI R IA
+António        IA SETR IE RCE
+Manuel        PA RCSD AST ISC GUS
+Ana        IAAJ PAG
+Isabel      PVR TCGEV
+
+#tr — timeslot  restrictions (teacher, slots_unavailable*)
+Isabel       13 14 15 16 17 18 19 20
+Manuel        1  2  3  4
+João        9  10 11 12 17 18 19 20
+
+#rr — room  restrictions (course, room)
+SETR       Lab01
+IM         Lab01
+
+#oc — online classes (course, lesson_week_index)
+PS         2
+GSI        2
+
+#rooms — available rooms
+SalaT
+SalaC
+Lab01
